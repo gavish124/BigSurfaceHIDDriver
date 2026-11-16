@@ -564,6 +564,13 @@ IOReturn VoodooI2CMultitouchHIDEventDriver::parseElements() {
     if (digitiser.contact_count_maximum) {
         UInt8 contact_count_maximum = getElementValue(digitiser.contact_count_maximum);
 
+        // Some devices (Surface type covers) never answer the feature report that holds this
+        // value, so it reads as 0 and no transducers would be created. Fall back to a default.
+        if (contact_count_maximum == 0) {
+            contact_count_maximum = 5;
+            IOLog("%s::%s Contact Count Maximum could not be read, assuming %d\n", getName(), name, contact_count_maximum);
+        }
+
         // Check if maximum contact count divides by digitiser finger count
         if (contact_count_maximum % digitiser.fingers->getCount() != 0) {
             IOLog("%s::%s Unknown digitiser type: got %d finger collections and a %d maximum contact count, ignoring extra fingers\n", getName(), name, digitiser.fingers->getCount(), contact_count_maximum);
