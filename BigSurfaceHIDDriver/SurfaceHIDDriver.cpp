@@ -42,7 +42,26 @@ void SurfaceHIDDriver::keyboardInputReceived(IOInterruptEventSource *sender, int
 }
 
 void SurfaceHIDDriver::touchpadInputReceived(IOInterruptEventSource *sender, int count) {
-    if (touchpad->handleReport(tpd_report) != kIOReturnSuccess)
+    // Stamp the report with the cover's own scan time (smooth) instead of the time the work loop ran.
+    UInt64 ts;
+    clock_get_uptime(&ts);
+    UInt8 *rb = (UInt8 *)tpd_report->getBytesNoCopy();
+    if (tpd_report->getLength() >= 9) {
+        static bool have = false;
+        static UInt16 last_scan = 0;
+        static UInt64 vt_ns = 0;
+        UInt64 now_ns;
+        absolutetime_to_nanoseconds(ts, &now_ns);
+        UInt16 scan = rb[6] | (rb[7] << 8);
+        if (have)
+            vt_ns += (UInt64)(UInt16)(scan - last_scan) * 100000;   // scan time unit assumed to be 100 us
+        if (!have || vt_ns > now_ns || now_ns - vt_ns > 30000000)
+            vt_ns = now_ns;
+        have = true;
+        last_scan = scan;
+        nanoseconds_to_absolutetime(vt_ns, &ts);
+    }
+    if (touchpad->handleReportWithTime(ts, tpd_report) != kIOReturnSuccess)
         LOG("Handle touchpad report error!");
 }
 
